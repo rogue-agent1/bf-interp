@@ -1,11 +1,6 @@
 # bf_interp
-
-bf_interp: Brainfuck interpreter.
-
-Single-file, zero-dependency Python CLI.
-
+Single-file Python CLI tool. Zero dependencies, Python 3.8+.
 ## Usage
-
 ```bash
-python3 bf_interp.py test
+python3 bf_interp.py --test
 ```

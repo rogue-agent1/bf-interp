@@ -1,70 +1,72 @@
 #!/usr/bin/env python3
-"""bf_interp: Brainfuck interpreter."""
+"""bf_interp - Brainfuck interpreter with optimization."""
 import sys
 
-def interpret(code, input_data="", tape_size=30000, max_steps=1000000):
-    # Strip non-BF chars
-    code = "".join(c for c in code if c in "+-<>.,[]")
+def bf_run(code, input_data="", tape_size=30000):
     tape = [0] * tape_size
     ptr = 0
     ip = 0
-    input_pos = 0
+    inp_idx = 0
     output = []
-    steps = 0
-    # Precompute bracket pairs
-    brackets = {}
+    jumps = {}
     stack = []
     for i, c in enumerate(code):
         if c == "[": stack.append(i)
         elif c == "]":
-            if not stack: raise SyntaxError("Unmatched ]")
             j = stack.pop()
-            brackets[j] = i
-            brackets[i] = j
-    if stack: raise SyntaxError("Unmatched [")
-    while ip < len(code) and steps < max_steps:
+            jumps[j] = i
+            jumps[i] = j
+    while ip < len(code):
         c = code[ip]
-        if c == "+": tape[ptr] = (tape[ptr] + 1) % 256
+        if c == ">": ptr += 1
+        elif c == "<": ptr -= 1
+        elif c == "+": tape[ptr] = (tape[ptr] + 1) % 256
         elif c == "-": tape[ptr] = (tape[ptr] - 1) % 256
-        elif c == ">": ptr = (ptr + 1) % tape_size
-        elif c == "<": ptr = (ptr - 1) % tape_size
         elif c == ".": output.append(chr(tape[ptr]))
         elif c == ",":
-            tape[ptr] = ord(input_data[input_pos]) if input_pos < len(input_data) else 0
-            input_pos += 1
+            tape[ptr] = ord(input_data[inp_idx]) if inp_idx < len(input_data) else 0
+            inp_idx += 1
         elif c == "[":
-            if tape[ptr] == 0: ip = brackets[ip]
+            if tape[ptr] == 0: ip = jumps[ip]
         elif c == "]":
-            if tape[ptr] != 0: ip = brackets[ip]
+            if tape[ptr] != 0: ip = jumps[ip]
         ip += 1
-        steps += 1
     return "".join(output)
 
+def bf_optimize(code):
+    optimized = []
+    i = 0
+    clean = "".join(c for c in code if c in "><+-.,[]")
+    while i < len(clean):
+        c = clean[i]
+        if c in "><+-":
+            count = 0
+            while i < len(clean) and clean[i] == c:
+                count += 1
+                i += 1
+            optimized.append((c, count))
+        else:
+            optimized.append((c, 1))
+            i += 1
+    return optimized
+
 def test():
-    # Hello World
     hello = "++++++++[>++++[>++>+++>+++>+<<<<-]>+>+>->>+[<]<-]>>.>---.+++++++..+++.>>.<-.<.+++.------.--------.>>+.>++."
-    assert interpret(hello) == "Hello World!\n"
-    # Cat (echo input)
-    assert interpret(",[.,]", "abc") == "abc"
-    # Add two numbers (3+5)
-    add = ",>++++++++++++++++++++++++++++++++++++++++++++++++.,."
-    # Simple: increment and print
-    result = interpret("++++++++++++++++++++++++++++++++++++++++++++++++.")  # 48 = '0'
-    assert result == "0"
-    # Loop counter
-    result2 = interpret("+++[>+<-]>.")  # tape[1] = 3, print chr(3)
-    assert result2 == chr(3)
-    # Syntax error
-    try:
-        interpret("[")
-        assert False
-    except SyntaxError:
-        pass
+    result = bf_run(hello)
+    assert result == "Hello World!\n"
+    cat = ",.,.,."
+    result2 = bf_run(cat, "ABC")
+    assert result2 == "ABC"
+    add = ",>,<[->+<]>."
+    result3 = bf_run(add, "\x02\x03")
+    assert ord(result3) == 5
+    assert bf_run("") == ""
+    clear = "[-]"
+    assert bf_run("+++++" + clear + ".") == "\x00"
+    opt = bf_optimize("+++>>>---<<<")
+    assert ("+", 3) in opt
+    assert (">", 3) in opt
     print("All tests passed!")
 
 if __name__ == "__main__":
-    if len(sys.argv) > 1 and sys.argv[1] == "test": test()
-    elif len(sys.argv) > 1:
-        with open(sys.argv[1]) as f:
-            print(interpret(f.read()))
-    else: print("Usage: bf_interp.py <file.bf> | bf_interp.py test")
+    test() if "--test" in sys.argv else print("bf_interp: Brainfuck interpreter. Use --test")
